@@ -16,7 +16,7 @@ This is an R Markdown document.
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
 
 # Github data and code repository
-https://github.com/mackaay/nesa_test
+https://github.com/mackaay/nesa_final/tree/main
 
 ## Task1 
 
@@ -230,7 +230,16 @@ Coarse-to-Fine Grid: Start with a sparse set of breakpoints to find the general 
 
 
 
+## Task4
+Include your technical writing sample in the submission, together with a short note explaining its context, your role in writing it, and the intended audience.
 
 
+This analysis provides a robust, probabilistic method for identifying the yield point—the critical transition where a material stops behaving elastically and begins to deform permanently—of an aluminium sample.
+By applying a Bayesian Piecewise Linear Model, the analysis moves beyond simple "best-guess" line fitting to provide a full picture of uncertainty.
 
 
+My Role: 
+I acted as the sole technical author, responsible for translating mathematical notation into implementation logic and documenting the API for the Shiny application.
+
+Intended Audience: 
+The intended audience is Junior Data Scientists and stakeholders who understand the basics of stress-strain curves. 
