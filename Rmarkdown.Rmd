@@ -1,0 +1,236 @@
+---
+title: "nesa_test"
+author: "Chenkai Ma"
+date: "2026-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. 
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. 
+
+# Github data and code repository
+https://github.com/mackaay/nesa_test
+
+## Task1 
+
+The smallest possible value of the algebraic dimension of $X$ is 10.
+
+
+## Task2
+Using aluminium.csv, which contains columns strain and stress, fit a one-breakpoint Bayesian piecewise linear model to estimate the yield point of the aluminium sample.
+
+### Load the dataset
+Loading data and visualize the relation of two variables
+```{r }
+df <- read.csv("./aluminium.csv")
+plot(df$stress ~ df$strain)
+x <- df$strain
+y <- df$stress
+n <- length(y)
+
+```
+
+### Prior Hyperparameters
+Setting the parameters , according to the instruction
+```{r }
+beta_0_val <- 30000
+v_0_val <- 20000^2
+beta0 <- c(beta_0_val, beta_0_val)
+V0 <- diag(c(v_0_val, v_0_val))
+invV0 <- solve(V0)
+a0 <- 4
+b0 <- 13.12
+```
+
+
+### Candidate breakpoints: unique internal strain values
+```{r}
+taus <- sort(unique(x))
+taus <- taus[taus > min(x) & taus < max(x)]
+
+```
+
+
+### Vector to store log marginal likelihood for each tau
+```{r}
+log_marg_lik <- numeric(length(taus))
+```
+
+```{r}
+for (i in 1:length(taus)) {
+  tau <- taus[i]
+  
+  # Define the design matrix Z based on the piecewise structure:
+  # mu = beta1 * min(x, tau) + beta2 * max(0, x - tau)
+  z1 <- pmin(x, tau)
+  z2 <- pmax(0, x - tau)
+  Z <- cbind(z1, z2)
+  
+  # Update parameters for the Normal-Inverse-Gamma posterior
+  Vn <- solve(invV0 + t(Z) %*% Z)
+  betan <- Vn %*% (invV0 %*% beta0 + t(Z) %*% y)
+  an <- a0 + n/2
+  
+  # b_n calculation for the conjugate NIG prior
+  # bn = b0 + 0.5 * (y'y + beta0' V0^-1 beta0 - betan' Vn^-1 betan)
+  term_y <- t(y) %*% y
+  term_prior <- t(beta0) %*% invV0 %*% beta0
+  term_post <- t(betan) %*% solve(Vn) %*% betan
+  bn <- as.numeric(b0 + 0.5 * (term_y + term_prior - term_post))
+  
+  # Calculate the log marginal likelihood log p(y | tau)
+  # Dropping constants that do not depend on tau
+  log_marg_lik[i] <- -an * log(bn) + 0.5 * determinant(Vn, logarithm = TRUE)$modulus
+}
+
+```
+
+
+### Calculate the posterior probabilities of tau (discrete)
+```{r}
+post_tau_unnorm <- exp(log_marg_lik - max(log_marg_lik))
+post_tau <- post_tau_unnorm / sum(post_tau_unnorm)
+```
+
+### Point Estimates
+Return the breakpoint values
+```{r}
+yield_point_mean <- sum(taus * post_tau)
+yield_point_map <- taus[which.max(post_tau)]
+```
+
+
+### Display Results
+```{r , echo=FALSE}
+cat("--- Bayesian Piecewise Linear Model Results ---\n")
+cat("Posterior Mean (Expected Yield Point):", yield_point_mean, "\n")
+cat("MAP Estimate (Mode of Posterior):    ", yield_point_map, "\n")
+```
+
+
+
+### Visualization of post yield point
+```{r}
+plot(taus, post_tau, type = "h", col = "blue", lwd = 2,
+     main = "Posterior Distribution of Yield Point (tau)",
+     xlab = "Strain (tau)", ylab = "Posterior Probability")
+abline(v = yield_point_mean, col = "red", lty = 2, lwd = 2)
+legend("topright", legend = c("Posterior Prob", "Posterior Mean"), 
+       col = c("blue", "red"), lty = c(1, 2), lwd = 2)
+
+```
+
+
+```{r, echo=FALSE}
+plot(taus, post_tau, type = "h", col = "blue", lwd = 2,
+     main = "Posterior Distribution of Yield Point (tau)",
+     xlab = "Strain (tau)", ylab = "Posterior Probability",
+     xlim = c(0.003, 0.005) )
+abline(v = yield_point_mean, col = "red", lty = 2, lwd = 2)
+legend("topright", legend = c("Posterior Prob", "Posterior Mean"), 
+       col = c("blue", "red"), lty = c(1, 2), lwd = 2)
+
+```
+
+
+
+### Visualization of fit plot 
+Storage for results
+```{r}
+log_marg_lik <- numeric(length(taus))
+beta_means <- matrix(0, nrow = length(taus), ncol = 2)
+```
+
+
+```{r}
+for (i in seq_along(taus)) {
+  tau <- taus[i]
+  # Basis functions for the continuous piecewise model
+  z1 <- pmin(x, tau)
+  z2 <- pmax(0, x - tau)
+  Z <- cbind(z1, z2)
+  
+  # Posterior parameters for beta and sigma^2 given tau
+  Vn <- solve(invV0 + t(Z) %*% Z)
+  betan <- Vn %*% (invV0 %*% beta0 + t(Z) %*% y)
+  an <- a0 + n/2
+  
+  # bn calculation (sum of squares term for NIG prior)
+  term_ss <- as.numeric(t(y) %*% y + t(beta0) %*% invV0 %*% beta0 - t(betan) %*% solve(Vn) %*% betan)
+  bn <- b0 + 0.5 * term_ss
+  
+  # Log-marginal likelihood: log p(y | tau)
+  # Includes determinant and bn terms (constants independent of tau can be ignored)
+  log_marg_lik[i] <- 0.5 * determinant(Vn, logarithm = TRUE)$modulus - an * log(bn)
+  
+  # Store the posterior mean of beta for this tau
+  beta_means[i, ] <- betan
+}
+```
+  
+  
+Compute Posterior Probabilities of tau
+```{r}
+post_probs <- exp(log_marg_lik - max(log_marg_lik))
+post_probs <- post_probs / sum(post_probs)
+```
+
+Calculate the Posterior Mean Curve
+```{r}
+x_grid <- seq(min(x), max(x), length.out = 200)
+y_post_mean <- numeric(length(x_grid))
+
+for (i in seq_along(taus)) {
+  tau_i <- taus[i]
+  prob_i <- post_probs[i]
+  b_i <- beta_means[i, ]
+  
+  # Contribution of this tau to the expected curve:
+  # mu(x|tau) = beta1 * min(x, tau) + beta2 * max(0, x - tau)
+  y_post_mean <- y_post_mean + prob_i * (b_i[1] * pmin(x_grid, tau_i) + b_i[2] * pmax(0, x_grid - tau_i))
+}
+```
+
+
+
+plotting
+```{r}
+plot(x, y, pch = 16, col = rgb(0.2, 0.2, 0.2, 0.5), 
+     main = "Aluminium Stress-Strain: Bayesian Piecewise Fit",
+     xlab = "Strain", ylab = "Stress")
+
+# Add the posterior mean curve
+lines(x_grid, y_post_mean, col = "red", lwd = 3)
+
+map_tau <- taus[which.max(post_probs)]
+abline(v = map_tau, col = "blue", lty = 2)
+
+legend("bottomright", legend = c("Observed Data", "Posterior Mean Curve", "MAP Yield Point"),
+       col = c("gray", "red", "blue"), pch = c(16, NA, NA), lty = c(NA, 1, 2), lwd = c(NA, 3, 1))
+
+```
+
+
+Since the priors for $\beta$ and $\sigma^2$ are conjugate (Normal-Inverse-Gamma) when $\tau$ is fixed, I can bypass MCMC sampling entirely and calculate the marginal likelihood for each candidate breakpoint directly.
+My Implementation Approach
+I treated the breakpoint $\tau$ as a discrete parameter. By iterating through each candidate strain value, I updated the model's beliefs using the following logic:Feature Engineering: I transformed the continuous strain into two "basis" variables—one representing the elastic phase and one representing the plastic phase—ensuring they meet at $\tau$.
+Exact Integration: For every $\tau$, I computed the posterior parameters and the marginal likelihood (the probability of the data given only $\tau$).
+Bayesian Model Averaging: The "fitted curve" is not just the best fit, but a weighted average of all possible models, weighted by their posterior probabilities.
+
+If the number of candidate breakpoints increases substantially, evaluating every single one is no longer feasible.
+Stochastic Search: Use MCMC (like Hamiltonian Monte Carlo in Stan) to treat $\tau$ as a continuous variable. The algorithm "walks" toward the most likely yield points rather than checking every possibility.
+Coarse-to-Fine Grid: Start with a sparse set of breakpoints to find the general "yield region," then initialize a dense search only in that high-probability area.
+
+
+
+
+
+
+
